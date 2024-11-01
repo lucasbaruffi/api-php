@@ -12,22 +12,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Tentar decodificar o JSON recebido
     $data = json_decode($input, true);
     
-    // Verificar se o número de telefone foi enviado e é uma string
-    if (isset($data['telefone']) && is_string($data['telefone'])) {
-        $telefone = preg_replace('/\D/', '', $data['telefone']); // Remove todos os caracteres não numéricos
+    // Verificar se o JSON foi decodificado corretamente e identificar o campo 'telefone'
+    if (json_last_error() === JSON_ERROR_NONE) {
         
-        // Verifica se o telefone tem 12 ou 13 dígitos
-        if (strlen($telefone) === 12) {
-            // Adiciona o dígito "9" após o código do país e antes do código de área
-            $telefone = substr($telefone, 0, 4) . '9' . substr($telefone, 4);
+        // Extrair o telefone, considerando os dois possíveis formatos
+        if (isset($data['customData']['telefone'])) {
+            $telefone = preg_replace('/\D/', '', $data['customData']['telefone']);
+        } elseif (isset($data['telefone'])) {
+            $telefone = preg_replace('/\D/', '', $data['telefone']);
+        } else {
+            http_response_code(400);
+            echo json_encode([
+                'sucesso' => false,
+                'mensagem' => 'Número de telefone não fornecido.'
+            ]);
+            exit;
         }
-        
+
+        // Adicionar o prefixo +55 caso esteja ausente
+        if (strpos($telefone, '55') !== 0) {
+            $telefone = '55' . $telefone;
+        }
+
+        // Verifica se o telefone tem 12 dígitos (sem +55) e adiciona o dígito "9" após o código do país
+        if (strlen($telefone) === 12) {
+            $telefone = '55' . substr($telefone, 2, 2) . '9' . substr($telefone, 4);
+        }
+
         // Verifica se o telefone ajustado agora tem 13 dígitos
         if (strlen($telefone) === 13) {
             // Preparar a resposta com o número formatado
+            $telefoneComMais = '+' . $telefone;
             $response = [
                 'sucesso' => true,
-                'telefone' => $telefone
+                'telefone' => $telefoneComMais
             ];
             echo json_encode($response);
         } else {
@@ -35,16 +53,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             http_response_code(400);
             echo json_encode([
                 'sucesso' => false,
-                'mensagem' => 'Número de telefone inválido. Certifique-se de que ele tenha 12 ou 13 dígitos.'
+                'mensagem' => 'Número de telefone inválido. Certifique-se de que ele tenha 12 ou 13 dígitos sem o +55.'
             ]);
         }
-        
+
     } else {
-        // Caso o JSON não contenha o telefone ou seja inválido
+        // JSON inválido
         http_response_code(400);
         echo json_encode([
             'sucesso' => false,
-            'mensagem' => 'JSON inválido ou número de telefone não fornecido.'
+            'mensagem' => 'JSON inválido.'
         ]);
     }
     
